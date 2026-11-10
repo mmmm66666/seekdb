@@ -43,6 +43,14 @@ public:
 
   int get_next_token(const char *&word, int64_t &word_len, int64_t &offset, int64_t &char_cnt);
 
+  // Returns the character length and type recorded while the text was segmented.
+  // The arbitration output pass re-walks the whole text; reading the recorded
+  // result keeps the classification bit-for-bit identical while avoiding the
+  // duplicate decode.
+  int get_cached_char(const int64_t offset,
+                      ObFTCharUtil::CharType &type,
+                      uint8_t &char_len) const;
+
   int compound(ObIKToken &result);
 
   int current_char(const char *&ch, uint8_t &char_len);
@@ -80,6 +88,12 @@ private:
   const char *fulltext_;
   int64_t fulltext_len_;
 
+  // Per-byte-position recorder for the (character type, byte length) pair that
+  // segmentation already computed. INVALID_CHAR_INFO marks "not recorded".
+  static constexpr uint8_t INVALID_CHAR_INFO = 0xFF;
+  ObIAllocator &allocator_;
+  char *char_info_;
+
   int64_t cursor_;
   int64_t next_char_len_;
   ObFTCharUtil::CharType next_char_type_;
@@ -101,7 +115,12 @@ public:
 
   virtual ~ObIIKProcessor() {}
 
-  int process(TokenizeContext &ctx);
+  // The caller already obtained the current character for this position; pass it
+  // down instead of making every processor fetch it again.
+  int process(TokenizeContext &ctx,
+              const char *ch,
+              const uint8_t char_len,
+              const ObFTCharUtil::CharType type);
 
   virtual int do_process(TokenizeContext &ctx,
                          const char *ch,

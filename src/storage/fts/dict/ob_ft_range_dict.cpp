@@ -23,6 +23,7 @@
 #include "common/mysqlclient/ob_isql_client.h"
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
+#include "lib/utility/alloc_assist.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/utility.h"
 #include "lib/utility/ob_smart_var.h"
@@ -378,20 +379,44 @@ int ObFTRangeDict::match_with_hit(const ObString &single_word,
   return last_hit.dict_->match_with_hit(single_word, last_hit, hit);
 }
 
+namespace
+{
+// Byte-wise comparison under CS_TYPE_UTF8MB4_BIN. This produces exactly the same
+// ordering as ObCharset::strcmp(CS_TYPE_UTF8MB4_BIN, ...) (memcmp on the common
+// prefix plus a length tiebreak, with the same empty string handling) while
+// skipping the per-call charset dispatch. It is used on the per-character range
+// lookup, one of the hottest loops of tokenization.
+inline int compare_bin_word(const ObString &l, const ObString &r)
+{
+  int cmp = 0;
+  if (OB_UNLIKELY(l.empty())) {
+    cmp = r.empty() ? 0 : -1;
+  } else if (OB_UNLIKELY(r.empty())) {
+    cmp = 1;
+  } else {
+    const int64_t len = l.length() < r.length() ? l.length() : r.length();
+    cmp = MEMCMP(l.ptr(), r.ptr(), len);
+    if (0 == cmp) {
+      cmp = static_cast<int>(l.length() - r.length());
+    }
+  }
+  return cmp;
+}
+} // namespace
+
 int ObFTRangeDict::find_first_char_range(const ObString &single_word, ObIFTDict *&dict) const
 {
   int ret = OB_SUCCESS;
   bool found = false;
-  for (int i = 0; OB_SUCC(ret) && !found && i < range_dicts_.size(); ++i) {
-    if (ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                          range_dicts_[i].start_.get_word(),
-                          single_word)
-            <= 0
-        && ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                             range_dicts_[i].end_.get_word(),
-                             single_word)
-               >= 0) {
-      dict = range_dicts_[i].dict_;
+  for (int64_t i = 0; OB_SUCC(ret) && !found && i < range_dicts_.size(); ++i) {
+    const ObFTRange &range = range_dicts_[i];
+    const int cmp_start = compare_bin_word(range.start_.get_word(), single_word);
+    if (cmp_start > 0) {
+      // single_word is smaller than the range start, try the next range
+    } else if (compare_bin_word(range.end_.get_word(), single_word) < 0) {
+      // single_word is larger than the range end, try the next range
+    } else {
+      dict = range.dict_;
       found = true;
     }
   }

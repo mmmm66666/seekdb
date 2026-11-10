@@ -22,6 +22,7 @@
 #include "lib/charset/ob_charset.h"
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
+#include "lib/utility/alloc_assist.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "storage/fts/ik/ob_ik_arbitrator.h"
 #include "storage/fts/ik/ob_ik_char_util.h"
@@ -31,17 +32,14 @@ namespace oceanbase
 {
 namespace storage
 {
-int ObIIKProcessor::process(TokenizeContext &ctx)
+int ObIIKProcessor::process(TokenizeContext &ctx,
+                            const char *ch,
+                            const uint8_t char_len,
+                            const ObFTCharUtil::CharType type)
 {
   int ret = OB_SUCCESS;
 
-  ObFTCharUtil::CharType type;
-  const char *ch = nullptr;
-  uint8_t char_len = 0;
-
-  if (OB_FAIL(ctx.current_char_type(type))) {
-  } else if (OB_FAIL(ctx.current_char(ch, char_len))) {
-  } else if (OB_FAIL(do_process(ctx, ch, char_len, type))) {
+  if (OB_FAIL(do_process(ctx, ch, char_len, type))) {
   }
   return ret;
 }
@@ -51,9 +49,10 @@ TokenizeContext::TokenizeContext(ObCollationType coll_type,
                                  const char *fulltext,
                                  int64_t fulltext_len,
                                  bool is_smart)
-    : coll_type_(coll_type), fulltext_(fulltext), fulltext_len_(fulltext_len), cursor_(0),
-      next_char_len_(0), handle_size_(0), is_smart_(is_smart), token_list_(allocator),
-      result_list_(allocator)
+    : coll_type_(coll_type), fulltext_(fulltext), fulltext_len_(fulltext_len),
+      allocator_(allocator), char_info_(nullptr), cursor_(0), next_char_len_(0),
+      next_char_type_(ObFTCharUtil::CharType::USELESS), handle_size_(0), is_smart_(is_smart),
+      token_list_(allocator), result_list_(allocator)
 {
 }
 
@@ -63,7 +62,15 @@ int TokenizeContext::init()
 
   if (OB_ISNULL(fulltext_) || fulltext_len_ <= 0) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(prepare_next_char())) {
+  } else {
+    // The recorder is a pure optimization: if the allocation fails the output
+    // pass falls back to decoding, so the failure is not propagated.
+    char_info_ = static_cast<char *>(allocator_.alloc(fulltext_len_));
+    if (OB_NOT_NULL(char_info_)) {
+      MEMSET(char_info_, INVALID_CHAR_INFO, fulltext_len_);
+    }
+    if (OB_FAIL(prepare_next_char())) {
+    }
   }
   return ret;
 }
@@ -110,6 +117,33 @@ int TokenizeContext::prepare_next_char()
                                                        fulltext_ + cursor_,
                                                        next_char_len_,
                                                        next_char_type_))) {
+  } else if (OB_NOT_NULL(char_info_) && cursor_ >= 0 && cursor_ < fulltext_len_) {
+    // Pack (type, byte length) into one byte per text position. A UTF-8/UTF-16
+    // character is at most 4 bytes long, so three bits are enough for the length.
+    if (OB_LIKELY(next_char_len_ > 0 && next_char_len_ <= 7)) {
+      char_info_[cursor_] = static_cast<char>((static_cast<uint8_t>(next_char_type_) << 3)
+                                              | static_cast<uint8_t>(next_char_len_));
+    }
+  }
+  return ret;
+}
+
+int TokenizeContext::get_cached_char(const int64_t offset,
+                                     ObFTCharUtil::CharType &type,
+                                     uint8_t &char_len) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(char_info_) || OB_UNLIKELY(offset < 0 || offset >= fulltext_len_)) {
+    ret = OB_ENTRY_NOT_EXIST;
+  } else {
+    const uint8_t info = static_cast<uint8_t>(char_info_[offset]);
+    const uint8_t len = static_cast<uint8_t>(info & 0x7);
+    if (INVALID_CHAR_INFO == info || 0 == len) {
+      ret = OB_ENTRY_NOT_EXIST;
+    } else {
+      type = static_cast<ObFTCharUtil::CharType>(info >> 3);
+      char_len = len;
+    }
   }
   return ret;
 }
@@ -174,6 +208,7 @@ TokenizeContext::~TokenizeContext()
 {
   token_list_.reset();
   result_list_.reset();
+  char_info_ = nullptr;
 }
 
 int TokenizeContext::get_next_token(const char *&word,
