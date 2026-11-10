@@ -1467,6 +1467,7 @@ BEGIN(in_c_comment);
 }
 
 "&&" {return AND_OP;}
+"=>" {return ARROW;}
 "="  {return COMP_EQ;}
 "==" {
   ParseResult *p = (ParseResult *)yyextra;

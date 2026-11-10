@@ -1659,6 +1659,19 @@ int ObSelectResolver::expand_target_list(
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(append(column_items, get_stmt()->get_column_items()))) {
     }
+  } else if (table_item.is_file_table()) {
+    if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(get_stmt()->get_column_size() == 0)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < get_stmt()->get_column_size(); ++i) {
+        const ColumnItem *cur_col = get_stmt()->get_column_item(i);
+        if (OB_ISNULL(cur_col)) {
+          ret = OB_ERR_UNEXPECTED;
+        } else if (cur_col->table_id_ == table_item.table_id_ &&
+                   OB_FAIL(column_items.push_back(*cur_col))) {
+        }
+      }
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
   }

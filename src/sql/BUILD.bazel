@@ -182,6 +182,23 @@ cc_library(
     visibility = ["//src/observer:__pkg__"],
 )
 
+# The file SQL readers are pure helpers, their headers are exported so that the
+# standalone unit tests can exercise them without pulling the whole SQL module.
+cc_library(
+    name = "file_sql_test_headers",
+    testonly = True,
+    hdrs = [
+        "engine/basic/ob_file_scan_utils.h",
+        "engine/basic/ob_parquet_reader.h",
+    ],
+    deps = [
+        ":sql_runtime_interface",
+        "//src/oblib:oblib_base",
+    ],
+    tags = ["manual"],
+    visibility = ["//unittest/sql:__subpackages__"],
+)
+
 # Private means private to the SQL module, not private to one Unity action.
 # Submodule header owners are visible only through this SQL-internal seam.
 cc_library(

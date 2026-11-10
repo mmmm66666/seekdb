@@ -107,6 +107,7 @@ class ObTempTableInsertOpSpec;
 class ObTempTableTransformationOpSpec;
 class ObSelectIntoSpec;
 class ObFunctionTableSpec;
+class ObFileScanSpec;
 class ObLinkDmlSpec;
 class ObInsertAllTableInfo;
 class ObTableInsertAllSpec;
@@ -118,6 +119,7 @@ struct ObTableScanCtDef;
 struct ObDASScanCtDef;
 struct InsertAllTableInfo;
 class ObLogValuesTableAccess;
+class ObLogFileScan;
 class ObValuesTableAccessSpec;
 class ObLogExpand;
 class ObExpandVecSpec;
@@ -380,6 +382,7 @@ private:
   int generate_spec(ObLogInsert &op, ObPxMultiPartSSTableInsertSpec &spec, const bool in_root_job);
   int generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec, const bool in_root_job);
   int generate_spec(ObLogFunctionTable &op, ObFunctionTableSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogFileScan &op, ObFileScanSpec &spec, const bool in_root_job);
   int generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec, const bool in_root_job);
 
   // online optimizer stats gathering

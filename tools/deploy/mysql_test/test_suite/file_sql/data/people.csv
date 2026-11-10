@@ -1,0 +1,5 @@
+id,name,score,active,birth
+1,Alice,88.5,true,1990-05-01
+2,Bob,92,false,1988-12-31
+3,"Carol, Jr.",75.25,true,1995-07-04
+4,,60,false,2000-02-29

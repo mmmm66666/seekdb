@@ -1,0 +1,5 @@
+# The CSV fixtures must be checked out with their exact line endings so that the
+# file_sql suite can exercise LF, CRLF and embedded newlines.
+crlf.csv -text
+notes.csv -text
+semicolon.csv -text

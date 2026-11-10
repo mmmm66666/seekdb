@@ -23,6 +23,7 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/expr/ob_shared_expr_resolver.h"
+#include <string>
 namespace oceanbase
 {
 namespace sql
@@ -32,6 +33,7 @@ class ObChildStmtResolver;
 class ObDelUpdStmt;
 class ObSelectResolver;
 class ObInsertResolver;
+struct ObFileSqlOptions;
 
 static char *str_to_lower(char *pszBuf, int64_t length);
 /*
@@ -207,6 +209,23 @@ public:
                                   TableItem *&table_item);
   int resolve_json_table_item(const ParseNode &table_node,
                               TableItem *&table_item);
+  int resolve_file_table_item(const ParseNode &table_node, TableItem *&table_item);
+  // the format is an ObFileSqlFormat value, kept as an integer here so that this
+  // interface header does not depend on the SQL-private file scan utilities
+  int resolve_file_table_options(const ParseNode &args_node,
+                                 const int64_t format,
+                                 ObFileSqlOptions &options,
+                                 ObString &path,
+                                 std::string &err_msg);
+  int resolve_file_table_prefix_arg(const ParseNode &node, ObString &value);
+  int generate_file_table_output_column_item(TableItem *table_item,
+                                             const ObDataType &data_type,
+                                             const ObString &column_name,
+                                             int64_t column_id,
+                                             ColumnItem *&col_item);
+  int resolve_file_table_column_item(const TableItem &table_item,
+                                     const ObString &column_name,
+                                     ColumnItem *&col_item);
   int resolve_unnest_item(const ParseNode &table_node, TableItem *&table_item);
   int create_unnest_table_item(TableItem *&table_item, ObString table_name);
   int unnest_table_add_column(TableItem *&table_item, ColumnItem *&col_item, ObString col_name);

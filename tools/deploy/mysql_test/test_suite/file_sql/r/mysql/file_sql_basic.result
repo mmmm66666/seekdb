@@ -1,0 +1,8 @@
+# ---- csv: inferred schema, projection, filter, order, limit ----
+# ---- csv: aggregation, group by and having ----
+# ---- csv: quoting, embedded newline, CRLF and named arguments ----
+# ---- jsonl: field union, missing fields, both entry points ----
+# ---- glob: file discovery ----
+# ---- join: inner, left and cross format ----
+# ---- column metadata is visible to explain / describe ----
+# ---- done ----

@@ -194,6 +194,8 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   } else if (OB_FAIL(part_names_.assign(other.part_names_))) {
   } else if (is_values_table() &&
              OB_FAIL(deep_copy_values_table_def(*other.values_table_def_, expr_copier, allocator))) {
+  } else if (is_file_table() &&
+             OB_FAIL(deep_copy_file_table_def(*other.file_table_def_, allocator))) {
   } else { /* do nothing */ }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(other.sample_info_)) {
@@ -1557,6 +1559,7 @@ int ObDMLStmt::formalize_stmt_expr_reference(ObRawExprFactory *expr_factory,
         ret = OB_ERR_UNEXPECTED;
       } else if (table_item->is_function_table() ||
                  table_item->is_json_table() ||
+                 table_item->is_file_table() ||
                  table_item->for_update_ ||
                  table_item->is_values_table()) {
         if (OB_FAIL(set_sharable_expr_reference(*column_item.expr_, ExplicitedRefType::REF_BY_NORMAL))) {
@@ -4462,6 +4465,38 @@ int TableItem::deep_copy_values_table_def(const ObValuesTableDef& table_def,
   } else {
     values_table_def_ = new (tmp) ObValuesTableDef();
     if (OB_FAIL(values_table_def_->deep_copy(table_def, expr_copier, allocator))) {
+    }
+  }
+  return ret;
+}
+
+int ObFileTableDef::deep_copy(const ObFileTableDef &other, ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(ob_write_string(*allocator, other.path_, path_))) {
+  } else if (OB_FAIL(ob_write_string(*allocator, other.options_, options_))) {
+  } else if (OB_FAIL(ob_write_string(*allocator, other.schema_str_, schema_str_))) {
+  } else {
+    format_ = other.format_;
+    column_cnt_ = other.column_cnt_;
+  }
+  return ret;
+}
+
+int TableItem::deep_copy_file_table_def(const ObFileTableDef &table_def,
+                                        ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  void *tmp = NULL;
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_ISNULL(tmp = allocator->alloc(sizeof(ObFileTableDef)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    file_table_def_ = new (tmp) ObFileTableDef();
+    if (OB_FAIL(file_table_def_->deep_copy(table_def, allocator))) {
     }
   }
   return ret;

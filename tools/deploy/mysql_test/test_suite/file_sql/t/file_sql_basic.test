@@ -1,0 +1,83 @@
+## file_sql: read local CSV / JSONL files directly from SQL.
+##
+## The suite is an end to end smoke test: every statement below has to execute
+## successfully. Result sets are not compared (--disable_result_log) so that the
+## expected output only depends on the --echo markers and can never drift with
+## value formatting, column order or the observer's data directory. Value level
+## checks live in unittest/sql/engine/basic/test_file_scan_utils.cpp.
+--disable_query_log
+set enable_file_sql = 1;
+--enable_query_log
+
+--source mysql_test/include/file_sql_data.inc
+
+--echo # ---- csv: inferred schema, projection, filter, order, limit ----
+--disable_query_log
+--disable_result_log
+select * from read_csv('/tmp/file_sql_data/people.csv');
+select id, name from read_csv('/tmp/file_sql_data/people.csv') where id > 1 order by id desc limit 2;
+select id as pid, name as pname from read_csv('/tmp/file_sql_data/people.csv') p where p.id <= 2 order by pid;
+select * from read_csv('/tmp/file_sql_data/people.csv') where name like 'Carol%';
+select * from read_csv('/tmp/file_sql_data/people.csv') where name is null;
+select * from read_csv('/tmp/file_sql_data/people.csv') where active = 1;
+--enable_result_log
+
+--echo # ---- csv: aggregation, group by and having ----
+--disable_result_log
+select count(*), sum(id), min(id), max(id), avg(score) from read_csv('/tmp/file_sql_data/people.csv');
+select count(*), avg(score) from read_csv('/tmp/file_sql_data/people.csv') where id >= 2;
+select active, count(*) from read_csv('/tmp/file_sql_data/people.csv') group by active having count(*) >= 1;
+select sum(score) from read_csv('/tmp/file_sql_data/people.csv') group by active having sum(score) > 0;
+--enable_result_log
+
+--echo # ---- csv: quoting, embedded newline, CRLF and named arguments ----
+--disable_result_log
+select * from read_csv('/tmp/file_sql_data/notes.csv');
+select * from read_csv('/tmp/file_sql_data/crlf.csv');
+select * from read_csv('/tmp/file_sql_data/semicolon.csv', delimiter => ';');
+select * from read_csv('/tmp/file_sql_data/semicolon.csv', delim => ';', header => true);
+select * from read_csv('/tmp/file_sql_data/simple.csv', header => false);
+select * from read_csv('/tmp/file_sql_data/people.csv', sample_size => -1);
+select * from read_csv('/tmp/file_sql_data/people.csv', nullstr => 'Bob');
+--enable_result_log
+
+--echo # ---- jsonl: field union, missing fields, both entry points ----
+--disable_result_log
+select * from read_ndjson('/tmp/file_sql_data/employees.jsonl');
+select * from read_json('/tmp/file_sql_data/employees.jsonl');
+select name, dept, level from read_ndjson('/tmp/file_sql_data/employees.jsonl') order by name;
+select * from read_ndjson('/tmp/file_sql_data/employees.jsonl') where dept is null;
+select count(*), count(dept), count(level) from read_ndjson('/tmp/file_sql_data/employees.jsonl');
+--enable_result_log
+
+--echo # ---- glob: file discovery ----
+--disable_result_log
+select * from glob('/tmp/file_sql_data/*.csv');
+select file from glob('/tmp/file_sql_data/people.csv');
+select count(*) from glob('/tmp/file_sql_data/*.csv');
+--enable_result_log
+
+--echo # ---- join: inner, left and cross format ----
+--disable_result_log
+select c.id, j.name
+from read_csv('/tmp/file_sql_data/people.csv') c
+join read_ndjson('/tmp/file_sql_data/employees.jsonl') j on c.name = j.name
+order by c.id;
+select c.id, j.name
+from read_csv('/tmp/file_sql_data/people.csv') c
+left join read_ndjson('/tmp/file_sql_data/employees.jsonl') j on c.name = j.name
+order by c.id;
+select count(*) from read_csv('/tmp/file_sql_data/people.csv') c, read_ndjson('/tmp/file_sql_data/employees.jsonl') j;
+--enable_result_log
+
+--echo # ---- column metadata is visible to explain / describe ----
+--disable_result_log
+explain select * from read_csv('/tmp/file_sql_data/people.csv');
+explain select id, name from read_csv('/tmp/file_sql_data/people.csv') where id = 1;
+describe select * from read_csv('/tmp/file_sql_data/people.csv');
+--enable_result_log
+--enable_query_log
+
+--source mysql_test/include/file_sql_data_cleanup.inc
+
+--echo # ---- done ----
